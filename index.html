@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EuCurrículo - Pro Builder</title>
+    
+    <!-- Bibliotecas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';</script>
+    <script src="https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary: #0d9488;
+            --primary-light: #f0fdfa;
+            --accent: #14b8a6;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fcfcfc;
+            overflow-x: hidden;
+        }
+
+        /* Layout 50/50 Desktop */
+        @media (min-width: 1024px) {
+            .split-container {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                height: 100vh;
+                overflow: hidden;
+            }
+            .form-side {
+                overflow-y: auto;
+                height: 100vh;
+                padding-bottom: 100px;
+            }
+            .preview-side {
+                background-color: #f1f5f9;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: flex-start;
+                overflow-y: auto;
+                padding: 40px 0;
+                border-left: 1px solid #e2e8f0;
+            }
+        }
+
+        /* Wizard & Progress Bar */
+        .step-content { display: none; }
+        .step-content.active { display: block; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .progress-fixed {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+        }
+
+        /* Input Feedback */
+        .form-input {
+            transition: all 0.3s ease;
+            border: 1px solid #e2e8f0;
+        }
+        .form-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+        .filled {
+            border-color: #10b981 !important;
+            background-color: #f0fdf4 !important;
+        }
+
+        /* Resume A4 Canvas */
+        .a4-canvas {
+            width: 210mm;
+            height: auto;
+            background: white;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+            padding: 15mm;
+            margin: 0 auto;
+            transform-origin: top center;
+            box-sizing: border-box;
+            color: #222;
+        }
+
+        /* Modelos */
+        .tpl-moderno { font-family: 'Inter', sans-serif; }
+        .tpl-moderno .header { border-left: 8px solid var(--primary); padding-left: 20px; }
+        
+        .tpl-classico { font-family: 'Georgia', serif; }
+        .tpl-classico .header { text-align: center; border-bottom: 2px solid #333; margin-bottom: 20px; padding-bottom: 10px; }
+
+        .tpl-criativo { font-family: 'Inter', sans-serif; }
+        .tpl-criativo .header { background: #1e293b; color: white; margin: -15mm -15mm 10mm -15mm; padding: 15mm 15mm; }
+
+        /* Loader */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.8);
+            display: none;
+            z-index: 1000;
+            place-items: center;
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div id="loading-overlay" class="grid">
+        <div class="flex flex-col items-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mb-4"></div>
+            <p class="font-bold text-teal-800">Processando Currículo...</p>
+        </div>
+    </div>
+
+    <div class="split-container">
+        
+        <!-- LADO DO FORMULÁRIO -->
+        <div class="form-side bg-white">
+            <header class="p-6 border-b flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-teal-600 flex items-center gap-2">
+                    <i class="fas fa-file-invoice"></i> EuCurrículo
+                </h1>
+                <div class="flex gap-2">
+                    <label class="cursor-pointer bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2">
+                        <i class="fas fa-file-import"></i> Importar PDF
+                        <input type="file" id="pdf-import" accept=".pdf" class="hidden" onchange="importPDF(event)">
+                    </label>
+                </div>
+            </header>
+
+            <div class="progress-fixed border-b px-6 py-4">
+                <div class="flex justify-between items-center mb-2">
+                    <span id="step-label" class="text-xs font-bold uppercase tracking-wider text-teal-700">Dados Pessoais</span>
+                    <span id="progress-percent" class="text-xs font-bold text-teal-700">25%</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-2">
+                    <div id="progress-bar" class="bg-teal-600 h-2 rounded-full transition-all duration-500" style="width: 25%"></div>
+                </div>
+            </div>
+
+            <div class="p-8 max-w-2xl mx-auto">
+                <form id="cv-form" oninput="handleFormInput()">
+                    
+                    <!-- PASSO 1: PESSOAL -->
+                    <section id="step1" class="step-content active">
+                        <div class="flex items-center gap-6 mb-8">
+                            <div id="photo-container" class="w-32 h-32 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center relative overflow-hidden group">
+                                <i class="fas fa-user text-slate-300 text-4xl group-hover:scale-110 transition"></i>
+                                <img id="img-preview" class="hidden absolute inset-0 w-full h-full object-cover">
+                                <button type="button" onclick="removePhoto()" id="btn-remove-photo" class="hidden absolute top-1 right-1 bg-red-500 text-white w-6 h-6 rounded-full text-[10px]"><i class="fas fa-times"></i></button>
+                            </div>
+                            <div class="flex-1">
+                                <h2 class="text-xl font-bold text-slate-800">Foto de Perfil</h2>
+                                <p class="text-sm text-slate-500 mb-3">Formatos: JPG, PNG. Tamanho máx: 2MB</p>
+                                <input type="file" id="photo-input" accept="image/*" class="hidden" onchange="handlePhoto(event)">
+                                <button type="button" onclick="document.getElementById('photo-input').click()" class="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-teal-100">Upload Foto</button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="col-span-2">
+                                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Nome Completo *</label>
+                                <input type="text" name="nome" placeholder="João Exemplo Silva" class="form-input w-full p-3 rounded-xl outline-none" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">E-mail *</label>
+                                <input type="email" name="email" placeholder="contato@email.com" class="form-input w-full p-3 rounded-xl outline-none" required>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Estado Civil</label>
+                                <select name="estado_civil" class="form-input w-full p-3 rounded-xl outline-none bg-white">
+                                    <option value="">Selecione...</option>
+                                    <option>Solteiro(a)</option>
+                                    <option>Casado(a)</option>
+                                    <option>Divorciado(a)</option>
+                                    <option>Viúvo(a)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Idade</label>
+                                <input type="number" name="idade" placeholder="Ex: 28" class="form-input w-full p-3 rounded-xl outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">CEP</label>
+                                <input type="text" name="cep" id="cep" placeholder="00000-000" onblur="fetchCEP(this.value)" class="form-input w-full p-3 rounded-xl outline-none">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Endereço (opcional)</label>
+                                <input type="text" name="endereco" placeholder="Rua, número, bairro" class="form-input w-full p-3 rounded-xl outline-none">
+                            </div>
+                            <div class="col-span-2 grid grid-cols-3 gap-2">
+                                <div class="col-span-2">
+                                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Cidade</label>
+                                    <input type="text" name="cidade" id="cidade" class="form-input w-full p-3 rounded-xl outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">UF</label>
+                                    <input type="text" name="uf" id="uf" maxlength="2" class="form-input w-full p-3 rounded-xl outline-none text-center uppercase">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="tel-list" class="mt-6 space-y-3">
+                            <label class="block text-xs font-bold text-slate-400 uppercase">Telefones para Contato</label>
+                            <div class="tel-item flex gap-2 items-center">
+                                <input type="text" name="telefone[]" oninput="maskPhone(this)" placeholder="(00) 00000-0000" class="form-input flex-1 p-3 rounded-xl outline-none" required>
+                                <div class="flex items-center gap-1 bg-slate-50 px-3 py-3 rounded-xl border">
+                                    <input type="checkbox" name="is_whatsapp[]" class="w-4 h-4 accent-teal-600">
+                                    <span class="text-[10px] font-bold text-slate-400">WHATSAPP</span>
+                                </div>
+                                <button type="button" onclick="removeThis(this)" class="btn-del text-red-300 hover:text-red-500 hidden"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <button type="button" onclick="addTel()" class="mt-3 text-teal-600 text-xs font-bold flex items-center gap-1 hover:underline">
+                            <i class="fas fa-plus-circle"></i> Adicionar Outro Telefone
+                        </button>
+                    </section>
+
+                    <!-- PASSO 2: OBJETIVO & EXP -->
+                    <section id="step2" class="step-content">
+                        <div class="mb-8">
+                            <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Objetivo Profissional *</label>
+                            <textarea name="objetivo" rows="4" placeholder="Ex: Atuar na área de vendas buscando crescimento..." class="form-input w-full p-4 rounded-xl outline-none" required></textarea>
+                        </div>
+
+                        <div class="flex items-center gap-2 mb-6 bg-teal-50 p-4 rounded-xl border border-teal-100">
+                            <input type="checkbox" id="no-exp" onchange="toggleExperience(this)" class="w-5 h-5 accent-teal-600 cursor-pointer">
+                            <label for="no-exp" class="text-sm font-bold text-teal-800 cursor-pointer">Não possuo experiência / Primeiro Emprego</label>
+                        </div>
+
+                        <div id="exp-list" class="space-y-6">
+                            <div class="exp-item p-6 border rounded-2xl bg-white relative">
+                                <h4 class="text-teal-600 font-bold text-xs uppercase mb-4">Experiência Profissional</h4>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <input type="text" name="exp_cargo[]" placeholder="Cargo (Ex: Vendedor)" class="form-input w-full p-3 rounded-xl outline-none">
+                                    <input type="text" name="exp_empresa[]" placeholder="Empresa" class="form-input w-full p-3 rounded-xl outline-none">
+                                    <input type="number" name="exp_inicio[]" placeholder="Ano Início" class="form-input w-full p-3 rounded-xl outline-none">
+                                    <div class="relative">
+                                        <input type="number" name="exp_fim[]" placeholder="Ano Fim" class="form-input w-full p-3 rounded-xl outline-none">
+                                        <label class="absolute -bottom-5 right-0 text-[10px] flex items-center gap-1 font-bold text-slate-400">
+                                            <input type="checkbox" name="exp_atual[]" onchange="toggleAtual(this)"> ATUAL
+                                        </label>
+                                    </div>
+                                    <textarea name="exp_desc[]" rows="2" placeholder="Descreva brevemente suas atividades..." class="col-span-2 form-input w-full p-3 rounded-xl outline-none"></textarea>
+                                </div>
+                                <button type="button" onclick="removeThis(this)" class="btn-del absolute top-4 right-4 text-red-300 hover:text-red-500 hidden"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <button type="button" id="btn-add-exp" onclick="addExp()" class="mt-6 text-teal-600 text-xs font-bold flex items-center gap-1 hover:underline">
+                            <i class="fas fa-plus-circle"></i> Adicionar Nova Experiência
+                        </button>
+                    </section>
+
+                    <!-- PASSO 3: FORMAÇÃO & IDIOMAS -->
+                    <section id="step3" class="step-content">
+                        <div id="edu-list" class="space-y-6 mb-8">
+                            <div class="edu-item p-6 border rounded-2xl bg-white relative">
+                                <h4 class="text-teal-600 font-bold text-xs uppercase mb-4">Formação Acadêmica</h4>
+                                <div class="space-y-4">
+                                    <select name="edu_nivel[]" class="form-input w-full p-3 rounded-xl outline-none bg-white">
+                                        <option value="">Selecione o Nível...</option>
+                                        <option>Sem instrução / Analfabeto</option>
+                                        <option>Ensino Fundamental Incompleto</option>
+                                        <option>Ensino Fundamental Completo</option>
+                                        <option>Ensino Médio Incompleto</option>
+                                        <option>Ensino Médio Completo</option>
+                                        <option>Técnico Incompleto</option>
+                                        <option>Técnico Completo</option>
+                                        <option>Superior Incompleto – Bacharelado</option>
+                                        <option>Superior Completo – Bacharelado</option>
+                                        <option>Superior Incompleto – Licenciatura</option>
+                                        <option>Superior Completo – Licenciatura</option>
+                                        <option>Superior Incompleto – Tecnólogo</option>
+                                        <option>Superior Completo – Tecnólogo</option>
+                                        <option>Especialização / Pós-graduação Lato Sensu</option>
+                                        <option>Mestrado Incompleto</option>
+                                        <option>Mestrado Completo</option>
+                                        <option>Doutorado Incompleto</option>
+                                        <option>Doutorado Completo</option>
+                                        <option>Pós-doutorado</option>
+                                    </select>
+                                    <input type="text" name="edu_inst[]" placeholder="Instituição (Ex: USP, Escola Estadual...)" class="form-input w-full p-3 rounded-xl outline-none">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <input type="number" name="edu_inicio[]" placeholder="Ano Início (opcional)" class="form-input w-full p-3 rounded-xl outline-none">
+                                        <input type="number" name="edu_fim[]" placeholder="Ano Término (opcional)" class="form-input w-full p-3 rounded-xl outline-none">
+                                    </div>
+                                </div>
+                                <button type="button" onclick="removeThis(this)" class="btn-del absolute top-4 right-4 text-red-300 hover:text-red-500 hidden"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <button type="button" onclick="addEdu()" class="text-teal-600 text-xs font-bold flex items-center gap-1 hover:underline mb-10">
+                            <i class="fas fa-plus-circle"></i> Adicionar Formação
+                        </button>
+
+                        <div class="border-t pt-8">
+                            <h3 class="font-bold text-slate-800 mb-4">Idiomas</h3>
+                            <div id="lang-list" class="space-y-3">
+                                <div class="lang-item flex gap-2 items-center">
+                                    <select name="lang_nome[]" class="form-input flex-1 p-3 rounded-xl outline-none bg-white">
+                                        <option value="">Idioma...</option>
+                                        <option>Inglês</option>
+                                        <option>Espanhol</option>
+                                        <option>Francês</option>
+                                        <option>Chinês (Mandarim)</option>
+                                        <option>Árabe</option>
+                                        <option>Hindi</option>
+                                        <option>Português</option>
+                                        <option>Russo</option>
+                                        <option>Japonês</option>
+                                        <option>Alemão</option>
+                                        <option>Coreano</option>
+                                        <option>Italiano</option>
+                                    </select>
+                                    <select name="lang_nivel[]" class="form-input flex-1 p-3 rounded-xl outline-none bg-white">
+                                        <option value="">Nível...</option>
+                                        <option>Básico</option>
+                                        <option>Intermediário</option>
+                                        <option>Avançado</option>
+                                        <option>Fluente</option>
+                                        <option>Nativo</option>
+                                    </select>
+                                    <button type="button" onclick="removeThis(this)" class="btn-del text-red-300 hover:text-red-500 hidden"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                            <button type="button" onclick="addLang()" class="mt-3 text-teal-600 text-xs font-bold flex items-center gap-1 hover:underline">
+                                <i class="fas fa-plus-circle"></i> Adicionar Idioma
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- PASSO 4: FINAL -->
+                    <section id="step4" class="step-content">
+                        <div class="space-y-8">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Habilidades Técnicas e Interpessoais *</label>
+                                <textarea name="habilidades" rows="5" placeholder="Ex: Comunicação assertiva, Pacote Office avançado, Gestão de equipes..." class="form-input w-full p-4 rounded-xl outline-none" required></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Detalhes Adicionais (Opcional)</label>
+                                <textarea name="adicionais" rows="3" placeholder="Ex: Disponibilidade para viagens, CNH B, Projetos voluntários..." class="form-input w-full p-4 rounded-xl outline-none"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="mt-12 bg-teal-50 border border-teal-100 p-6 rounded-2xl">
+                            <h3 class="font-bold text-teal-800 mb-2">Tudo pronto?</h3>
+                            <p class="text-xs text-teal-600 mb-6">Confira o preview ao lado antes de baixar seu PDF.</p>
+                            <button type="button" id="btn-gerar" onclick="downloadCV()" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-4 rounded-xl shadow-xl shadow-teal-100 transition flex items-center justify-center gap-3">
+                                <i class="fas fa-cloud-download-alt"></i> BAIXAR CURRÍCULO (PDF)
+                            </button>
+                            <p id="validation-msg" class="text-[10px] text-red-500 mt-2 font-bold hidden text-center">Preencha todos os campos obrigatórios (nome, telefone, objetivo, formação, habilidades)</p>
+                        </div>
+                    </section>
+
+                    <!-- NAVEGAÇÃO -->
+                    <div class="flex justify-between items-center mt-12 pt-8 border-t">
+                        <button type="button" id="btn-prev" onclick="moveStep(-1)" class="px-6 py-3 rounded-xl border border-slate-200 font-bold text-slate-400 hover:bg-slate-50 invisible">Anterior</button>
+                        <button type="button" id="btn-next" onclick="moveStep(1)" class="px-10 py-3 rounded-xl bg-teal-600 text-white font-bold hover:bg-teal-700 shadow-lg shadow-teal-100 transition">Seguinte</button>
+                    </div>
+                </form>
+            </div>
+
+            <footer class="p-8 border-t bg-slate-50">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <p class="text-xs text-slate-400">© 2024 EuCurrículo - Feito por <a href="https://example.com" target="_blank" class="text-teal-500 font-bold hover:underline">Ciclano</a></p>
+                    <div class="flex gap-4 items-center">
+                        <button class="bg-amber-100 text-amber-700 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-amber-200 transition">
+                            <i class="fas fa-coffee"></i> Me pague um café
+                        </button>
+                    </div>
+                </div>
+            </footer>
+        </div>
+
+        <!-- LADO DO PREVIEW -->
+        <div class="preview-side">
+            <div class="mb-6 flex gap-4 bg-white p-2 rounded-2xl shadow-sm justify-between w-full max-w-xl mx-auto">
+                <div class="flex gap-4">
+                    <button onclick="changeTemplate('moderno')" class="tpl-btn active px-4 py-2 rounded-xl text-xs font-bold border transition" id="btn-tpl-moderno">Moderno</button>
+                    <button onclick="changeTemplate('classico')" class="tpl-btn px-4 py-2 rounded-xl text-xs font-bold border transition" id="btn-tpl-classico">Clássico</button>
+                    <button onclick="changeTemplate('criativo')" class="tpl-btn px-4 py-2 rounded-xl text-xs font-bold border transition" id="btn-tpl-criativo">Criativo</button>
+                </div>
+                <button onclick="downloadCV()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2">
+                    <i class="fas fa-cloud-download-alt"></i> Baixar PDF
+                </button>
+            </div>
+
+            <div id="capture-area">
+                <div id="resume-render" class="a4-canvas tpl-moderno">
+                    <div class="h-full flex flex-col items-center justify-center text-slate-300">
+                        <i class="fas fa-file-invoice text-6xl mb-4"></i>
+                        <p class="font-bold">Aguardando dados...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 text-slate-400 text-[10px] flex items-center gap-2">
+                <i class="fas fa-info-circle"></i>
+                Pré-visualização em tempo real (Escala A4)
+            </div>
+        </div>
+
+    </div>
+
+<script>
+    // Configurações Globais
+    let currentStep = 1;
+    let selectedTemplate = 'moderno';
+    let userPhoto = '';
+
+    // --- NAVEGAÇÃO & PROGRESSO ---
+    function moveStep(delta) {
+        if (delta > 0 && !validateStep(currentStep)) return;
+        
+        currentStep += delta;
+        if (currentStep < 1) currentStep = 1;
+        if (currentStep > 4) currentStep = 4;
+
+        document.querySelectorAll('.step-content').forEach((s, i) => {
+            s.classList.toggle('active', (i + 1) === currentStep);
+        });
+
+        document.getElementById('btn-prev').classList.toggle('invisible', currentStep === 1);
+        document.getElementById('btn-next').style.display = currentStep === 4 ? 'none' : 'block';
+        
+        const progress = (currentStep / 4) * 100;
+        document.getElementById('progress-bar').style.width = `${progress}%`;
+        document.getElementById('progress-percent').innerText = `${Math.round(progress)}%`;
+
+        const stepLabels = ["Dados Pessoais", "Objetivo & Experiência", "Formação & Idiomas", "Habilidades"];
+        document.getElementById('step-label').innerText = stepLabels[currentStep - 1];
+        
+        document.querySelector('.form-side').scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function validateStep(step) {
+        const currentSec = document.getElementById(`step${step}`);
+        const requireds = currentSec.querySelectorAll('[required]');
+        let valid = true;
+
+        requireds.forEach(input => {
+            if (!input.value.trim()) {
+                input.classList.add('border-red-500');
+                valid = false;
+            } else {
+                input.classList.remove('border-red-500');
+            }
+        });
+        return valid;
+    }
+
+    // --- MANIPULAÇÃO DE DADOS ---
+    function handleFormInput() {
+        document.querySelectorAll('.form-input').forEach(input => {
+            let isFilled = false;
+
+            if (input.tagName === 'SELECT') {
+                isFilled = input.value && input.value.trim() !== '' && input.selectedIndex > 0;
+            } else if (input.type === 'checkbox') {
+                isFilled = input.checked;
+            } else {
+                isFilled = input.value && input.value.trim() !== '';
+            }
+
+            if (isFilled) {
+                input.classList.add('filled');
+            } else {
+                input.classList.remove('filled');
+            }
+        });
+
+        renderResume();
+    }
+
+    async function fetchCEP(val) {
+        const cep = val.replace(/\D/g, '');
+        if (cep.length !== 8) return;
+
+        try {
+            const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+            const data = await res.json();
+            if (!data.erro) {
+                document.getElementById('cidade').value = data.localidade;
+                document.getElementById('uf').value = data.uf.toUpperCase();
+                handleFormInput();
+            }
+        } catch (e) {
+            console.error("Erro CEP", e);
+        }
+    }
+
+    function handlePhoto(e) {
+        const file = e.target.files[0];
+        if (file && file.size <= 2 * 1024 * 1024) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                userPhoto = ev.target.result;
+                document.getElementById('img-preview').src = userPhoto;
+                document.getElementById('img-preview').classList.remove('hidden');
+                document.getElementById('btn-remove-photo').classList.remove('hidden');
+                renderResume();
+            };
+            reader.readAsDataURL(file);
+        } else {
+            alert('Arquivo muito grande ou inválido.');
+        }
+    }
+
+    function removePhoto() {
+        userPhoto = '';
+        document.getElementById('img-preview').src = '';
+        document.getElementById('img-preview').classList.add('hidden');
+        document.getElementById('btn-remove-photo').classList.add('hidden');
+        document.getElementById('photo-input').value = '';
+        renderResume();
+    }
+
+    function maskPhone(i) {
+        let v = i.value.replace(/\D/g, '');
+        if (v.length > 11) v = v.substring(0, 11);
+        if (v.length === 11) i.value = `(${v.substring(0,2)}) ${v.substring(2,7)}-${v.substring(7)}`;
+        else if (v.length === 10) i.value = `(${v.substring(0,2)}) ${v.substring(2,6)}-${v.substring(6)}`;
+        else if (v.length > 2) i.value = `(${v.substring(0,2)}) ${v.substring(2)}`;
+        else i.value = v;
+    }
+
+// --- CAMPOS DINÂMICOS ---
+        function addTel() {
+            const container = document.getElementById('tel-list');
+            const div = document.createElement('div');
+            div.className = 'tel-item flex gap-2 items-center';
+            div.innerHTML = `
+                <input type="text" name="telefone[]" oninput="maskPhone(this)" placeholder="(00) 00000-0000" class="form-input flex-1 p-3 rounded-xl outline-none">
+                <div class="flex items-center gap-1 bg-slate-50 px-3 py-3 rounded-xl border">
+                    <input type="checkbox" name="is_whatsapp[]" class="w-4 h-4 accent-teal-600">
+                    <span class="text-[10px] font-bold text-slate-400">WHATSAPP</span>
+                </div>
+                <button type="button" onclick="removeThis(this)" class="btn-del text-red-300 hover:text-red-500"><i class="fas fa-trash"></i></button>`;
+            container.appendChild(div);
+            checkRemoveButtons('tel-item');
+        }
+
+        function addExp() {
+            const container = document.getElementById('exp-list');
+            const div = document.createElement('div');
+            div.className = 'exp-item p-6 border rounded-2xl bg-white relative';
+            div.innerHTML = `
+                <h4 class="text-teal-600 font-bold text-xs uppercase mb-4">Experiência Profissional</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="text" name="exp_cargo[]" placeholder="Cargo" class="form-input w-full p-3 rounded-xl outline-none">
+                    <input type="text" name="exp_empresa[]" placeholder="Empresa" class="form-input w-full p-3 rounded-xl outline-none">
+                    <input type="number" name="exp_inicio[]" placeholder="Início" class="form-input w-full p-3 rounded-xl outline-none">
+                    <div class="relative">
+                        <input type="number" name="exp_fim[]" placeholder="Fim" class="form-input w-full p-3 rounded-xl outline-none">
+                        <label class="absolute -bottom-5 right-0 text-[10px] flex items-center gap-1 font-bold text-slate-400">
+                            <input type="checkbox" name="exp_atual[]" onchange="toggleAtual(this)"> ATUAL
+                        </label>
+                    </div>
+                    <textarea name="exp_desc[]" rows="2" placeholder="Descrição..." class="col-span-2 form-input w-full p-3 rounded-xl outline-none"></textarea>
+                </div>
+                <button type="button" onclick="removeThis(this)" class="btn-del absolute top-4 right-4 text-red-300 hover:text-red-500"><i class="fas fa-trash"></i></button>`;
+            container.appendChild(div);
+            checkRemoveButtons('exp-item');
+        }
+
+        function addEdu() {
+            const container = document.getElementById('edu-list');
+            const div = document.createElement('div');
+            div.className = 'edu-item p-6 border rounded-2xl bg-white relative';
+            div.innerHTML = `
+                <h4 class="text-teal-600 font-bold text-xs uppercase mb-4">Formação Acadêmica</h4>
+                <div class="space-y-4">
+                    <select name="edu_nivel[]" class="form-input w-full p-3 rounded-xl outline-none bg-white">
+                        <option value="">Selecione o Nível...</option>
+                        <option>Sem instrução / Analfabeto</option>
+                        <option>Ensino Fundamental Incompleto</option>
+                        <option>Ensino Fundamental Completo</option>
+                        <option>Ensino Médio Incompleto</option>
+                        <option>Ensino Médio Completo</option>
+                        <option>Técnico Incompleto</option>
+                        <option>Técnico Completo</option>
+                        <option>Superior Incompleto – Bacharelado</option>
+                        <option>Superior Completo – Bacharelado</option>
+                        <option>Superior Incompleto – Licenciatura</option>
+                        <option>Superior Completo – Licenciatura</option>
+                        <option>Superior Incompleto – Tecnólogo</option>
+                        <option>Superior Completo – Tecnólogo</option>
+                        <option>Especialização / Pós-graduação Lato Sensu</option>
+                        <option>Mestrado Incompleto</option>
+                        <option>Mestrado Completo</option>
+                        <option>Doutorado Incompleto</option>
+                        <option>Doutorado Completo</option>
+                        <option>Pós-doutorado</option>
+                    </select>
+                    <input type="text" name="edu_inst[]" placeholder="Instituição" class="form-input w-full p-3 rounded-xl outline-none">
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="number" name="edu_inicio[]" placeholder="Início" class="form-input w-full p-3 rounded-xl outline-none">
+                        <input type="number" name="edu_fim[]" placeholder="Término" class="form-input w-full p-3 rounded-xl outline-none">
+                    </div>
+                </div>
+                <button type="button" onclick="removeThis(this)" class="btn-del absolute top-4 right-4 text-red-300 hover:text-red-500"><i class="fas fa-trash"></i></button>`;
+            container.appendChild(div);
+            checkRemoveButtons('edu-item');
+        }
+
+        function addLang() {
+            const container = document.getElementById('lang-list');
+            const div = document.createElement('div');
+            div.className = 'lang-item flex gap-2 items-center';
+            div.innerHTML = `
+                <select name="lang_nome[]" class="form-input flex-1 p-3 rounded-xl outline-none bg-white">
+                    <option value="">Idioma...</option>
+                    <option>Inglês</option><option>Espanhol</option><option>Francês</option>
+                    <option>Chinês (Mandarim)</option><option>Árabe</option><option>Hindi</option>
+                    <option>Português</option><option>Russo</option><option>Japonês</option>
+                    <option>Alemão</option><option>Coreano</option><option>Italiano</option>
+                </select>
+                <select name="lang_nivel[]" class="form-input flex-1 p-3 rounded-xl outline-none bg-white">
+                    <option value="">Nível...</option>
+                    <option>Básico</option><option>Intermediário</option>
+                    <option>Avançado</option><option>Fluente</option><option>Nativo</option>
+                </select>
+                <button type="button" onclick="removeThis(this)" class="btn-del text-red-300 hover:text-red-500"><i class="fas fa-trash"></i></button>`;
+            container.appendChild(div);
+            checkRemoveButtons('lang-item');
+        }
+
+        function removeThis(btn) {
+            const item = btn.parentElement;
+            const cls = item.className.split(' ')[0];
+            item.remove();
+            checkRemoveButtons(cls);
+            renderResume();
+        }
+
+        function checkRemoveButtons(cls) {
+            const items = document.querySelectorAll(`.${cls}`);
+            items.forEach(it => {
+                const btn = it.querySelector('.btn-del');
+                if (btn) btn.style.display = items.length > 1 ? 'block' : 'none';
+            });
+        }
+
+        function toggleExperience(cb) {
+            const list = document.getElementById('exp-list');
+            const btn = document.getElementById('btn-add-exp');
+            if (cb.checked) {
+                list.style.opacity = '0.3';
+                list.style.pointerEvents = 'none';
+                btn.classList.add('hidden');
+            } else {
+                list.style.opacity = '1';
+                list.style.pointerEvents = 'auto';
+                btn.classList.remove('hidden');
+            }
+            renderResume();
+        }
+
+        function toggleAtual(cb) {
+            const input = cb.parentElement.previousElementSibling;
+            input.disabled = cb.checked;
+            if (cb.checked) input.value = "";
+            renderResume();
+        }
+
+        // --- RENDERIZAÇÃO DO CURRÍCULO ---
+        function changeTemplate(tpl) {
+            selectedTemplate = tpl;
+            document.querySelectorAll('.tpl-btn').forEach(b => b.classList.remove('active', 'border-teal-500', 'text-teal-600', 'bg-teal-50'));
+            const btn = document.getElementById(`btn-tpl-${tpl}`);
+            btn.classList.add('active', 'border-teal-500', 'text-teal-600', 'bg-teal-50');
+            
+            const render = document.getElementById('resume-render');
+            render.className = `a4-canvas tpl-${tpl}`;
+            renderResume();
+        }
+
+        function renderResume() {
+            const form = document.getElementById('cv-form');
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            const target = document.getElementById('resume-render');
+            
+            // Dados de listas (Telefones, Exps, etc)
+            const getListData = (selector, fields) => {
+                const items = document.querySelectorAll(selector);
+                return Array.from(items).map(it => {
+                    const obj = {};
+                    fields.forEach(f => {
+                        const el = it.querySelector(`[name="${f}"]`);
+                        if (el) obj[f.replace('[]', '')] = el.type === 'checkbox' ? el.checked : el.value;
+                    });
+                    return obj;
+                });
+            };
+
+            const tels = getListData('.tel-item', ['telefone[]', 'is_whatsapp[]']);
+            const exps = getListData('.exp-item', ['exp_cargo[]', 'exp_empresa[]', 'exp_inicio[]', 'exp_fim[]', 'exp_atual[]', 'exp_desc[]']);
+            const edus = getListData('.edu-item', ['edu_nivel[]', 'edu_inst[]', 'edu_inicio[]', 'edu_fim[]']);
+            const langs = getListData('.lang-item', ['lang_nome[]', 'lang_nivel[]']);
+
+            if (!data.nome && !data.objetivo && !userPhoto) {
+                target.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-300"><i class="fas fa-file-invoice text-6xl mb-4"></i><p class="font-bold">Aguardando dados...</p></div>`;
+                return;
+            }
+
+            // HTML Dinâmico baseado no template
+            let html = `
+                <div class="header flex justify-between items-start mb-8">
+                    <div class="flex-1">
+                        <h1 class="text-4xl font-bold uppercase tracking-tight text-slate-900">${data.nome || 'NOME COMPLETO'}</h1>
+                        <div class="text-[13px] text-slate-500 mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                            ${data.email ? `<span><i class="fas fa-envelope text-teal-600"></i> ${data.email}</span>` : ''}
+                            ${tels.filter(t => t.telefone).map(t => `<span><i class="fas fa-phone text-teal-600"></i> ${t.telefone} ${t.is_whatsapp ? '<i class="fab fa-whatsapp text-green-500"></i>' : ''}</span>`).join('')}
+                            ${data.endereco ? `<span><i class="fas fa-home text-teal-600"></i> ${data.endereco}</span>` : ''}
+                            ${data.cidade ? `<span><i class="fas fa-map-marker-alt text-teal-600"></i> ${data.cidade}, ${data.uf}</span>` : ''}
+                        </div>
+                        <div class="text-[13px] text-slate-400 mt-1 uppercase font-semibold">
+                            ${data.estado_civil ? `<span>${data.estado_civil}</span>` : ''}
+                            ${data.idade ? `<span class="mx-2">|</span> <span>${data.idade} ANOS</span>` : ''}
+                        </div>
+                    </div>
+                    ${userPhoto ? `<img src="${userPhoto}" class="w-24 h-24 rounded-lg object-cover border-2 border-slate-100 shadow-sm ml-4">` : ''}
+                </div>
+
+                <div class="section mb-6">
+                    <h2 class="text-sm font-bold text-teal-700 uppercase border-b border-slate-100 pb-1 mb-2">Objetivo</h2>
+                    <p class="text-[13px] leading-relaxed text-slate-600">${data.objetivo || '...'}</p>
+                </div>
+            `;
+
+            // Experiência
+            if (!document.getElementById('no-exp').checked) {
+                const activeExps = exps.filter(e => e.exp_cargo);
+                if (activeExps.length > 0) {
+                    html += `<div class="section mb-6">
+                        <h2 class="text-sm font-bold text-teal-700 uppercase border-b border-slate-100 pb-1 mb-3">Experiência Profissional</h2>
+                        ${activeExps.map(e => `
+                            <div class="mb-4">
+                                <div class="flex justify-between items-start mb-1">
+                                    <h3 class="text-[14px] font-bold text-slate-800">${e.exp_cargo}</h3>
+                                    <span class="text-[12px] text-slate-400 font-bold uppercase">${e.exp_inicio} — ${e.exp_atual ? 'Atual' : e.exp_fim}</span>
+                                </div>
+                                <div class="text-[12px] text-teal-600 font-bold mb-1 italic">${e.exp_empresa}</div>
+                                <p class="text-[12px] text-slate-500 leading-normal">${e.exp_desc ? e.exp_desc.replace(/\n/g, '<br>') : ''}</p>
+                            </div>
+                        `).join('')}
+                    </div>`;
+                }
+            } else {
+                html += `<div class="section mb-6">
+                    <h2 class="text-sm font-bold text-teal-700 uppercase border-b border-slate-100 pb-1 mb-2">Experiência</h2>
+                    <p class="text-[13px] italic text-slate-400">Em busca da primeira oportunidade profissional.</p>
+                </div>`;
+            }
+
+            // Formação
+            const activeEdus = edus.filter(e => e.edu_nivel);
+            if (activeEdus.length > 0) {
+                html += `<div class="section mb-6">
+                    <h2 class="text-sm font-bold text-teal-700 uppercase border-b border-slate-100 pb-1 mb-3">Formação Acadêmica</h2>
+                    ${activeEdus.map(e => `
+                        <div class="flex justify-between mb-2">
+                            <div>
+                                <h3 class="text-[13px] font-bold text-slate-800">${e.edu_nivel}</h3>
+                                <div class="text-[12px] text-slate-400 font-medium">${e.edu_inst}</div>
+                            </div>
+                            <span class="text-[12px] text-slate-400 font-bold">${e.edu_inicio} — ${e.edu_fim}</span>
+                        </div>
+                    `).join('')}
+                </div>`;
+            }
+
+            // Idiomas e Habilidades (Duas colunas)
+            const activeLangs = langs.filter(l => l.lang_nome);
+            if (activeLangs.length > 0 || data.habilidades) {
+                html += `<div class="grid grid-cols-2 gap-8">
+                    ${data.habilidades ? `
+                        <div>
+                            <h2 class="text-sm font-bold text-teal-700 uppercase border-b border-slate-100 pb-1 mb-2">Habilidades</h2>
+                            <p class="text-[12px] text-slate-600 leading-relaxed">${data.habilidades.replace(/\n/g, '<br>')}</p>
+                        </div>
+                    ` : ''}
+                    ${activeLangs.length > 0 ? `
+                        <div>
+                            <h2 class="text-sm font-bold text-teal-700 uppercase border-b border-slate-100 pb-1 mb-2">Idiomas</h2>
+                            <div class="text-[12px] text-slate-600">
+                                ${activeLangs.map(l => `<strong>${l.lang_nome}:</strong> ${l.lang_nivel}`).join('<br>')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>`;
+            }
+
+            if (data.adicionais) {
+                html += `<div class="section mt-6">
+                    <h2 class="text-sm font-bold text-teal-700 uppercase border-b border-slate-100 pb-1 mb-2">Informações Adicionais</h2>
+                    <p class="text-[12px] text-slate-600">${data.adicionais.replace(/\n/g, '<br>')}</p>
+                </div>`;
+            }
+
+            target.innerHTML = html;
+        }
+
+        // --- GERAÇÃO DE PDF ---
+        function downloadCV() {
+            const btn = document.getElementById('btn-gerar');
+            const msg = document.getElementById('validation-msg');
+            
+            // Validação mínima para gerar
+            const nome = document.querySelector('[name="nome"]').value;
+            const objetivo = document.querySelector('[name="objetivo"]').value;
+            const habilidades = document.querySelector('[name="habilidades"]').value;
+            const tels = document.querySelectorAll('[name="telefone[]"]');
+            const edus = document.querySelectorAll('[name="edu_nivel[]"]');
+            let hasTel = false;
+            let hasEdu = false;
+            tels.forEach(t => { if (t.value) hasTel = true; });
+            edus.forEach(e => { if (e.value) hasEdu = true; });
+            
+            if (!nome || !objetivo || !habilidades || !hasTel || !hasEdu) {
+                msg.classList.remove('hidden');
+                setTimeout(() => msg.classList.add('hidden'), 3000);
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner animate-spin"></i> GERANDO PDF...';
+
+            const element = document.getElementById('resume-render');
+            const opt = {
+                margin: 0,
+                filename: `Curriculo_${nome.replace(/\s/g, '_')}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 3, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> BAIXAR CURRÍCULO (PDF)';
+            });
+        }
+
+
+    // === IMPORTAÇÃO DE PDF CORRIGIDA E ROBUSTA ===
+    async function importPDF(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        document.getElementById('loading-overlay').style.display = 'grid';
+
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+            let fullText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+            }
+
+            if (fullText.trim().length < 300) {
+                fullText = await runOCROnPDF(arrayBuffer);
+            }
+
+            extractAllFromText(fullText);
+        } catch (err) {
+            console.error("Erro ao importar PDF:", err);
+            alert("Erro ao ler o PDF. Tente preencher manualmente.");
+        } finally {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+    }
+
+    async function runOCROnPDF(arrayBuffer) {
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let fullText = '';
+
+        const worker = await Tesseract.createWorker();
+        await worker.load();
+        await worker.loadLanguage('por');
+        await worker.initialize('por');
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 2.0 });
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+            const { data: { text } } = await worker.recognize(canvas);
+            fullText += text + '\n';
+        }
+
+        await worker.terminate();
+        return fullText;
+    }
+
+    function extractAllFromText(text) {
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+        const lowerText = text.toLowerCase();
+
+        // Nome
+        let name = '';
+        for (let i = 0; i < Math.min(10, lines.length); i++) {
+            const line = lines[i];
+            const words = line.split(' ');
+            if (words.length >= 2 && words.length <= 5 && line.length < 80) {
+                if (words.every(w => w[0] === w[0].toUpperCase())) {
+                    if (!lowerText.includes('currículo') && !lowerText.includes('resume') && !lowerText.includes('cv')) {
+                        name = line;
+                        break;
+                    }
+                }
+            }
+        }
+        if (name) document.querySelector('[name="nome"]').value = name.trim();
+
+        // E-mail
+        const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+        if (emailMatch) document.querySelector('[name="email"]').value = emailMatch[0];
+
+        // Telefones
+        const phoneRegex = /\b(?:\(?\d{2}\)?\s?)?(?:9?\d{4}-?\d{4}|9?\d{8})\b/g;
+        const phonesFound = [...new Set(text.match(phoneRegex) || [])];
+
+        const telList = document.getElementById('tel-list');
+        telList.innerHTML = '';
+        phonesFound.forEach((phone, i) => {
+            let cleaned = phone.replace(/\D/g, '');
+            let formatted = phone;
+            let isWhats = false;
+
+            if (cleaned.length === 11 && cleaned[2] === '9') {
+                formatted = `(${cleaned.substring(0,2)}) ${cleaned.substring(2,7)}-${cleaned.substring(7)}`;
+                isWhats = true;
+            } else if (cleaned.length === 10) {
+                formatted = `(${cleaned.substring(0,2)}) ${cleaned.substring(2,6)}-${cleaned.substring(6)}`;
+            }
+
+            const div = document.createElement('div');
+            div.className = 'tel-item flex gap-2 items-center';
+            div.innerHTML = `
+                <input type="text" name="telefone[]" value="${formatted}" oninput="maskPhone(this)" class="form-input flex-1 p-3 rounded-xl outline-none">
+                <div class="flex items-center gap-1 bg-slate-50 px-3 py-3 rounded-xl border">
+                    <input type="checkbox" name="is_whatsapp[]" ${isWhats ? 'checked' : ''} class="w-4 h-4 accent-teal-600">
+                    <span class="text-[10px] font-bold text-slate-400">WHATSAPP</span>
+                </div>
+                <button type="button" onclick="removeThis(this)" class="btn-del text-red-300 hover:text-red-500 ${i === 0 ? 'hidden' : ''}"><i class="fas fa-trash"></i></button>`;
+            telList.appendChild(div);
+        });
+        if (phonesFound.length === 0) addTel();
+
+        // CEP e Cidade/UF
+        const cepMatch = text.match(/\b\d{5}-?\d{3}\b/);
+        if (cepMatch) {
+            const cepClean = cepMatch[0].replace('-', '');
+            document.querySelector('[name="cep"]').value = cepClean;
+            fetchCEP(cepClean);
+        }
+
+        // Endereço
+        const addressMatch = text.match(/(rua|avenida|av\.?|travessa|alameda)[\s\w.,0-9-]+/i);
+        if (addressMatch) document.querySelector('[name="endereco"]').value = addressMatch[0].trim();
+
+        // Idade
+        const ageMatch = text.match(/(\d{2})\s*(anos|idade)/i);
+        if (ageMatch) document.querySelector('[name="idade"]').value = ageMatch[1];
+
+        // Estado Civil
+        const civilMatch = text.match(/(solteiro|casado|divorciado|vi[úu]vo)/i);
+        if (civilMatch) {
+            const status = civilMatch[0].toLowerCase();
+            const map = {
+                'solteiro': 'Solteiro(a)',
+                'casado': 'Casado(a)',
+                'divorciado': 'Divorciado(a)',
+                'viúvo': 'Viúvo(a)',
+                'viuvo': 'Viúvo(a)'
+            };
+            document.querySelector('[name="estado_civil"]').value = map[status] || '';
+        }
+
+        // Objetivo
+        const objMatch = text.match(/(objetivo|perfil|resumo)[\s\S]{0,600}(?=experiência|formação)/i);
+        if (objMatch) {
+            let obj = objMatch[0].replace(/(objetivo|perfil|resumo)[\s:]*/i, '').trim();
+            if (obj.length > 20) document.querySelector('[name="objetivo"]').value = obj;
+        }
+
+        // Habilidades
+        const skillsMatch = text.match(/(habilidades|competências)[\s\S]{0,800}/i);
+        if (skillsMatch) {
+            let skills = skillsMatch[0].replace(/(habilidades|competências)[\s:]*/i, '').trim();
+            if (skills.length > 10) document.querySelector('[name="habilidades"]').value = skills;
+        }
+
+        handleFormInput();
+        alert("Currículo importado com sucesso! Revise os campos preenchidos.");
+    }
+
+    // Init
+    checkRemoveButtons('tel-item');
+    checkRemoveButtons('exp-item');
+    checkRemoveButtons('edu-item');
+    checkRemoveButtons('lang-item');
+</script>
+</body>
+</html>
